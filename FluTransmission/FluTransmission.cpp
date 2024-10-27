@@ -1,5 +1,6 @@
 ﻿#include <iostream>
 #include <fstream>
+#include <omp.h>
 
 const int gridHeight = 15;  // Grid height
 const int gridWidth = 20;   // Grid width
@@ -40,6 +41,7 @@ void printGridToFile(int** grid, int height, int width, int day) {
 
 // Function to update the grid based on transmission and recovery rules
 void updateGrid(int** grid, int** newGrid, int height, int width, double beta, int omega, int** sickDays) {
+#pragma omp parallel for collapse(2) // collapse(2) allows OpenMP to consider the nested loops as one loop for better thread distribution
     for (int i = 0; i < height; ++i) {
         for (int j = 0; j < width; ++j) {
             if (grid[i][j] == 1) {  // If person is sick
@@ -87,17 +89,32 @@ int main() {
 
     // Simulation loop
     for (int day = 0; day < numDays; ++day) {
-        // Update the grid based on transmission/recovery rules
-        updateGrid(grid, newGrid, gridHeight, gridWidth, beta, omega, sickDays);
+        // Parallel sections: One for updating the grid, another for writing to file
+        #pragma omp parallel sections
+        {
+        #pragma omp section
+            {
+                // Print the last day's grid to file while the next day's grid is being computed
+                if (day > 0) {
+                    printGridToFile(newGrid, gridHeight, gridWidth, day - 1);
+                }
+            }
 
-        // Print grid to file
-        printGridToFile(newGrid, gridHeight, gridWidth, day);
+            #pragma omp section
+            {
+                // Update the grid based on transmission/recovery rules
+                updateGrid(grid, newGrid, gridHeight, gridWidth, beta, omega, sickDays);
+            }
+        }
 
         // Swap grid and newGrid pointers for the next iteration
         int** temp = grid;
         grid = newGrid;
         newGrid = temp;
     }
+
+    // Print the last day's grid to file
+    printGridToFile(newGrid, gridHeight, gridWidth, numDays - 1);
 
     // Free dynamically allocated memory
     for (int i = 0; i < gridHeight; ++i) {
