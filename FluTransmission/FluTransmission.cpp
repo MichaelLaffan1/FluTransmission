@@ -9,6 +9,15 @@ double beta = 0.3;           // Likelihood of transmission
 int omega = 3;               // Days a person stays sick
 int numDays = 10;            // Total simulation days
 
+// Class to represent a person
+class Person {
+public:
+    bool was_infected;
+    int sick_days;
+
+    Person() : was_infected(false), sick_days(0) {}
+};
+
 // Custom pseudo-random number generator
 unsigned int customRand() {
     static unsigned int seed = 123456789;  // Seed value for random number generation
@@ -17,22 +26,25 @@ unsigned int customRand() {
 }
 
 // Function to initialize the grid with sick individuals based on initial ratio α
-void initializeGrid(int** grid, int height, int width, double alpha) {
-    for (int i = 0; i < height; ++i) {
-        for (int j = 0; j < width; ++j) {
+void initializeGrid(Person grid[gridHeight][gridWidth], double alpha) {
+    for (int i = 0; i < gridHeight; ++i) {
+        for (int j = 0; j < gridWidth; ++j) {
             int randVal = customRand() % 1000;
-            grid[i][j] = (randVal < alpha * 1000) ? 1 : 0;  // Sick person or Healthy person
+            if (randVal < alpha * 1000) {
+                grid[i][j].was_infected = true;  // Sick person
+                grid[i][j].sick_days = 1;        // Initialize sick days
+            }
         }
     }
 }
 
 // Function to print the grid to a file (ASCII output)
-void printGridToFile(int** grid, int height, int width, int day) {
+void printGridToFile(Person grid[gridHeight][gridWidth], int day) {
     std::ofstream file("flu_simulation.txt", std::ios::app);  // Append to file
     file << "Day " << day << ":\n";
-    for (int i = 0; i < height; ++i) {
-        for (int j = 0; j < width; ++j) {
-            file << grid[i][j] << " ";
+    for (int i = 0; i < gridHeight; ++i) {
+        for (int j = 0; j < gridWidth; ++j) {
+            file << (grid[i][j].was_infected ? 1 : 0) << " ";
         }
         file << "\n";
     }
@@ -40,30 +52,32 @@ void printGridToFile(int** grid, int height, int width, int day) {
 }
 
 // Function to update the grid based on transmission and recovery rules
-void updateGrid(int** grid, int** newGrid, int height, int width, double beta, int omega, int** sickDays) {
+void updateGrid(Person grid[gridHeight][gridWidth], Person newGrid[gridHeight][gridWidth]) {
 #pragma omp parallel for collapse(2) // collapse(2) allows OpenMP to consider the nested loops as one loop for better thread distribution
-    for (int i = 0; i < height; ++i) {
-        for (int j = 0; j < width; ++j) {
-            if (grid[i][j] == 1) {  // If person is sick
-                sickDays[i][j]++;
-                if (sickDays[i][j] >= omega) {
-                    newGrid[i][j] = 0;  // Recover
-                    sickDays[i][j] = 0;
-                }
-                else {
-                    newGrid[i][j] = 1;  // Stay sick
+    for (int i = 0; i < gridHeight; ++i) {
+        for (int j = 0; j < gridWidth; ++j) {
+            newGrid[i][j].was_infected = grid[i][j].was_infected; // Copy current infection status
+            newGrid[i][j].sick_days = grid[i][j].sick_days;       // Copy current sick days
+
+            if (grid[i][j].was_infected) {  // If person is sick
+                newGrid[i][j].sick_days++;
+                if (newGrid[i][j].sick_days >= omega) {
+                    newGrid[i][j].was_infected = false;  // Recover
+                    newGrid[i][j].sick_days = 0;
                 }
             }
             else {
                 int sickNeighbors = 0;
-                if (i > 0 && grid[i - 1][j] == 1) sickNeighbors++;
-                if (i < height - 1 && grid[i + 1][j] == 1) sickNeighbors++;
-                if (j > 0 && grid[i][j - 1] == 1) sickNeighbors++;
-                if (j < width - 1 && grid[i][j + 1] == 1) sickNeighbors++;
+                if (i > 0 && grid[i - 1][j].was_infected) sickNeighbors++;
+                if (i < gridHeight - 1 && grid[i + 1][j].was_infected) sickNeighbors++;
+                if (j > 0 && grid[i][j - 1].was_infected) sickNeighbors++;
+                if (j < gridWidth - 1 && grid[i][j + 1].was_infected) sickNeighbors++;
 
                 int randVal = customRand() % 1000;
-                newGrid[i][j] = (randVal < beta * sickNeighbors * 1000) ? 1 : 0;  // Get infected or Stay healthy
-                if (newGrid[i][j] == 1) sickDays[i][j] = 1;  // Start counting sick days
+                if (randVal < beta * sickNeighbors * 1000) {
+                    newGrid[i][j].was_infected = true;  // Get infected
+                    newGrid[i][j].sick_days = 1;        // Start counting sick days
+                }
             }
         }
     }
@@ -75,56 +89,42 @@ int main() {
     file.close();
 
     // Allocate grid and tracking arrays
-    int** grid = new int* [gridHeight];
-    int** newGrid = new int* [gridHeight];
-    int** sickDays = new int* [gridHeight];
-    for (int i = 0; i < gridHeight; ++i) {
-        grid[i] = new int[gridWidth];
-        newGrid[i] = new int[gridWidth];
-        sickDays[i] = new int[gridWidth] {0};  // Initialize sick days to 0
-    }
+    Person grid[gridHeight][gridWidth];
+    Person newGrid[gridHeight][gridWidth];
 
     // Initialize the grid
-    initializeGrid(grid, gridHeight, gridWidth, alpha);
+    initializeGrid(grid, alpha);
 
     // Simulation loop
     for (int day = 0; day < numDays; ++day) {
         // Parallel sections: One for updating the grid, another for writing to file
         #pragma omp parallel sections
         {
-        #pragma omp section
+            #pragma omp section
             {
                 // Print the last day's grid to file while the next day's grid is being computed
                 if (day > 0) {
-                    printGridToFile(newGrid, gridHeight, gridWidth, day - 1);
+                    printGridToFile(newGrid, day - 1);
                 }
             }
 
             #pragma omp section
             {
                 // Update the grid based on transmission/recovery rules
-                updateGrid(grid, newGrid, gridHeight, gridWidth, beta, omega, sickDays);
+                updateGrid(grid, newGrid);
             }
         }
 
         // Swap grid and newGrid pointers for the next iteration
-        int** temp = grid;
-        grid = newGrid;
-        newGrid = temp;
+        for (int i = 0; i < gridHeight; ++i) {
+            for (int j = 0; j < gridWidth; ++j) {
+                grid[i][j] = newGrid[i][j]; // Copy newGrid back to grid
+            }
+        }
     }
 
     // Print the last day's grid to file
-    printGridToFile(newGrid, gridHeight, gridWidth, numDays - 1);
-
-    // Free dynamically allocated memory
-    for (int i = 0; i < gridHeight; ++i) {
-        delete[] grid[i];
-        delete[] newGrid[i];
-        delete[] sickDays[i];
-    }
-    delete[] grid;
-    delete[] newGrid;
-    delete[] sickDays;
+    printGridToFile(newGrid, numDays - 1);
 
     return 0;
 }
