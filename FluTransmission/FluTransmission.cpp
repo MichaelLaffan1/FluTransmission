@@ -96,12 +96,27 @@ void printGridToFile(Person** grid, int day) {
     file.close();
 }
 
-// Function to update the grid based on transmission and recovery rules
-void updateGrid(Person** grid, Person** newGrid) {
+// Function to print the debug grid
+void printDebugGridToFile(int** debugGrid, int day) {
+    std::ofstream file("flu_debug.txt", std::ios::app);  // Append to file
+    file << "Day " << day << " (Thread IDs):\n";
+    for (int i = 0; i < gridHeight; ++i) {
+        for (int j = 0; j < gridWidth; ++j) {
+            file << debugGrid[i][j] << " ";
+        }
+        file << "\n";
+    }
+    file.close();
+}
+
+// Function to update the grid based on transmission and recovery rules, and log the thread that worked on the cell.
+void updateGrid(Person** grid, Person** newGrid, int** debugGrid) {
     #pragma omp parallel for collapse(2) // collapse(2) allows OpenMP to consider the nested loops as one loop for better thread distribution
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             newGrid[i][j] = grid[i][j]; // Copy current state
+
+            debugGrid[i][j] = omp_get_thread_num(); // Store the thread ID in debugGrid
 
             if (grid[i][j].sick_days > 0) {  // If person is sick
                 newGrid[i][j].sick_days++;  // Increment sick days
@@ -148,8 +163,16 @@ int main() {
         newGrid[i] = new Person[gridWidth];
     }
 
+    // Allocate memory for debugGrid
+    int** debugGrid = new int* [gridHeight];
+    for (int i = 0; i < gridHeight; ++i) {
+        debugGrid[i] = new int[gridWidth];
+        std::fill(debugGrid[i], debugGrid[i] + gridWidth, -1);  // Initialize with -1
+    }
+
     initializeGrid(grid, alpha);
     printGridToFile(grid, 0);
+    printDebugGridToFile(debugGrid, 0);
 
     // Simulation loop
     for (int day = 0; day < numDays; ++day) {
@@ -161,16 +184,17 @@ int main() {
                 // Print the last day's grid to file while the next day's grid is being computed
                 if (day > 0) {
                     printGridToFile(newGrid, day);
+                    printDebugGridToFile(debugGrid, day);
                 }
             }
             #pragma omp section
             {
                 // Update the grid based on transmission/recovery rules
-                updateGrid(grid, newGrid);
+                updateGrid(grid, newGrid, debugGrid);
             }
         }
 
-        // Swap grid and newGrid pointers for the next iteration
+        // Copy newGrid back to grid for the next iteration
         for (int i = 0; i < gridHeight; ++i) {
             for (int j = 0; j < gridWidth; ++j) {
                 grid[i][j] = newGrid[i][j]; // Copy newGrid back to grid
@@ -180,14 +204,17 @@ int main() {
 
     // Print the last day's grid to file
     printGridToFile(newGrid, numDays - 1);
+    printDebugGridToFile(debugGrid, numDays - 1);
 
     // Free dynamically allocated memory
     for (int i = 0; i < gridHeight; ++i) {
         delete[] grid[i];
         delete[] newGrid[i];
+        delete[] debugGrid[i];
     }
     delete[] grid;
     delete[] newGrid;
+    delete[] debugGrid;
 
     return 0;
 }
