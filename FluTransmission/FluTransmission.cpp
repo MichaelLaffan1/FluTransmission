@@ -58,13 +58,27 @@ unsigned int customRand() {
 
 // Function to initialize the grid with sick individuals based on initial ratio α
 void initializeGrid(Person** grid, double alpha) {
-    for (int i = 0; i < gridHeight; ++i) {
-        for (int j = 0; j < gridWidth; ++j) {
-            int randVal = customRand() % 1000;
-            if (randVal < alpha * 1000) {
-                grid[i][j].was_infected = true;  // Initially sick person
-                grid[i][j].sick_days = 1;        // Initialize sick days
-            }
+    int totalPeople = gridHeight * gridWidth;
+    int infectedCount = static_cast<int>(alpha * totalPeople);
+    std::cout << "infected count " << infectedCount << std::endl;
+
+    // Ensure that we do not place more infected individuals than the grid size
+    if (infectedCount > totalPeople) {
+        infectedCount = totalPeople;
+    }
+
+    int placedInfected = 0;
+
+    // Randomly place infected individuals in the grid
+    while (placedInfected < infectedCount) {
+        int i = customRand() % gridHeight;
+        int j = customRand() % gridWidth;
+
+        // Only place an infected person if the spot is not already infected
+        if (!grid[i][j].was_infected) {
+            grid[i][j].was_infected = true;
+            grid[i][j].sick_days = 1;
+            placedInfected++;
         }
     }
 }
@@ -135,6 +149,7 @@ int main() {
     }
 
     initializeGrid(grid, alpha);
+    printGridToFile(grid, 0);
 
     // Simulation loop
     for (int day = 0; day < numDays; ++day) {
@@ -145,7 +160,7 @@ int main() {
             {
                 // Print the last day's grid to file while the next day's grid is being computed
                 if (day > 0) {
-                    printGridToFile(newGrid, day - 1);
+                    printGridToFile(newGrid, day);
                 }
             }
             #pragma omp section
