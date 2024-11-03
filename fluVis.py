@@ -21,7 +21,7 @@ def read_flu_data(file_path):
     
     return data
 
-def animate_flu_data(days):
+def animate_data(days):
     fig, ax = plt.subplots()
     im = ax.imshow(days[0], cmap='coolwarm', vmin=0, vmax=1)
     
@@ -38,7 +38,7 @@ def animate_flu_data(days):
     )
     plt.show()
 
-def plot_flu_data(data):
+def plot_data(data):
     days = len(data)
     cols = int(np.ceil(np.sqrt(days)))
     rows = int(np.ceil(days / cols))
@@ -61,8 +61,10 @@ def plot_flu_data(data):
     plt.show()
 
 if __name__ == "__main__":
-    file_path = "FluTransmission/flu_simulation.txt"
-    flu_data = read_flu_data(file_path)
-    
-    plot_flu_data(flu_data)
-    animate_flu_data(flu_data)
+    flu_data = read_flu_data("FluTransmission/flu_simulation.txt")
+    plot_data(flu_data)
+    animate_data(flu_data)
+
+    debug_data = read_flu_data("FluTransmission/flu_debug.txt")
+    plot_data(debug_data)
+    animate_data(debug_data)
