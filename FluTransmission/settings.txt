@@ -1,0 +1,7 @@
+gridHeight: 15
+gridWidth: 20
+alpha: 0.1
+beta: 0.3
+omega: 3
+numDays: 10
+numThreads: 0
