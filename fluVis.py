@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+import matplotlib.animation as animation
 
 def read_flu_data(file_path):
     with open(file_path, 'r') as file:
@@ -21,22 +21,21 @@ def read_flu_data(file_path):
     
     return data
 
-def animate_flu_data(data):
-    fig, ax = plt.subplots(figsize=(6, 6))
+def animate_flu_data(days):
+    fig, ax = plt.subplots()
+    im = ax.imshow(days[0], cmap='coolwarm', vmin=0, vmax=1)
+    
+    # Add text annotation for the day counter
+    day_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, color='white', fontsize=12)
 
-    # Create an initial plot using the first day's data
-    im = ax.imshow(data[0], cmap='coolwarm', interpolation='nearest')
-    title = ax.text(0.5, 1.05, "Day 0", size=16, ha="center", transform=ax.transAxes)
-    ax.set_aspect('equal')
+    def update(frame):
+        im.set_data(days[frame])
+        day_text.set_text(f'Day {frame}')  # Update day label for each frame
+        return im, day_text
 
-    def update(day):
-        im.set_data(data[day])
-        title.set_text(f"Day {day}")
-        return [im, title]
-
-    # Create the animation with a 1.5-second delay between frames
-    anim = FuncAnimation(fig, update, frames=len(data), interval=1500, blit=True)
-
+    ani = animation.FuncAnimation(
+        fig, update, frames=len(days), blit=True, interval=1000
+    )
     plt.show()
 
 def plot_flu_data(data):
