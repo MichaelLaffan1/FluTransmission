@@ -31,7 +31,7 @@ void initializeGrid(Person grid[gridHeight][gridWidth], double alpha) {
         for (int j = 0; j < gridWidth; ++j) {
             int randVal = customRand() % 1000;
             if (randVal < alpha * 1000) {
-                grid[i][j].was_infected = true;  // Sick person
+                grid[i][j].was_infected = true;  // Initially sick person
                 grid[i][j].sick_days = 1;        // Initialize sick days
             }
         }
@@ -44,7 +44,7 @@ void printGridToFile(Person grid[gridHeight][gridWidth], int day) {
     file << "Day " << day << ":\n";
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
-            file << (grid[i][j].was_infected ? 1 : 0) << " ";
+            file << (grid[i][j].sick_days > 0 ? 1 : 0) << " ";
         }
         file << "\n";
     }
@@ -53,25 +53,24 @@ void printGridToFile(Person grid[gridHeight][gridWidth], int day) {
 
 // Function to update the grid based on transmission and recovery rules
 void updateGrid(Person grid[gridHeight][gridWidth], Person newGrid[gridHeight][gridWidth]) {
-#pragma omp parallel for collapse(2) // collapse(2) allows OpenMP to consider the nested loops as one loop for better thread distribution
+    #pragma omp parallel for collapse(2) // collapse(2) allows OpenMP to consider the nested loops as one loop for better thread distribution
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
-            newGrid[i][j].was_infected = grid[i][j].was_infected; // Copy current infection status
-            newGrid[i][j].sick_days = grid[i][j].sick_days;       // Copy current sick days
+            newGrid[i][j] = grid[i][j]; // Copy current state
 
-            if (grid[i][j].was_infected) {  // If person is sick
-                newGrid[i][j].sick_days++;
-                if (newGrid[i][j].sick_days >= omega) {
-                    newGrid[i][j].was_infected = false;  // Recover
-                    newGrid[i][j].sick_days = 0;
+            if (grid[i][j].sick_days > 0) {  // If person is sick
+                newGrid[i][j].sick_days++;  // Increment sick days
+                if (newGrid[i][j].sick_days >= omega) {  // Check if they recover
+                    newGrid[i][j].sick_days = 0;  // Person recovers (not sick anymore)
+                    // 'was_infected' remains true, preventing re-infection
                 }
             }
-            else {
+            else if (!grid[i][j].was_infected) {  // Only never-infected individuals can get infected
                 int sickNeighbors = 0;
-                if (i > 0 && grid[i - 1][j].was_infected) sickNeighbors++;
-                if (i < gridHeight - 1 && grid[i + 1][j].was_infected) sickNeighbors++;
-                if (j > 0 && grid[i][j - 1].was_infected) sickNeighbors++;
-                if (j < gridWidth - 1 && grid[i][j + 1].was_infected) sickNeighbors++;
+                if (i > 0 && grid[i - 1][j].sick_days > 0) sickNeighbors++;
+                if (i < gridHeight - 1 && grid[i + 1][j].sick_days > 0) sickNeighbors++;
+                if (j > 0 && grid[i][j - 1].sick_days > 0) sickNeighbors++;
+                if (j < gridWidth - 1 && grid[i][j + 1].sick_days > 0) sickNeighbors++;
 
                 int randVal = customRand() % 1000;
                 if (randVal < beta * sickNeighbors * 1000) {
@@ -88,16 +87,18 @@ int main() {
     std::ofstream file("flu_simulation.txt", std::ios::trunc);
     file.close();
 
-    // Allocate grid and tracking arrays
+    /* Allocate grid and tracking arrays. Having grid and newGrid allows for:
+        1. Consistent calculations by ensuring each day’s updates are based on a static snapshot of the previous day.
+        2. Correct modeling of simultaneous infection / recovery without interference from updates that have not yet been fully applied.
+    */
     Person grid[gridHeight][gridWidth];
     Person newGrid[gridHeight][gridWidth];
 
-    // Initialize the grid
     initializeGrid(grid, alpha);
 
     // Simulation loop
     for (int day = 0; day < numDays; ++day) {
-        // Parallel sections: One for updating the grid, another for writing to file
+        // Parallel sections: one for updating the grid, another for writing to file
         #pragma omp parallel sections
         {
             #pragma omp section
@@ -107,7 +108,6 @@ int main() {
                     printGridToFile(newGrid, day - 1);
                 }
             }
-
             #pragma omp section
             {
                 // Update the grid based on transmission/recovery rules
