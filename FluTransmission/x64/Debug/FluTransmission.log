@@ -1,6 +1,2 @@
 ﻿  FluTransmission.cpp
-C:\Users\zackz\FluTransmission\FluTransmission\FluTransmission.cpp(93,13): warning C4849: OpenMP 'collapse' clause ignored in 'parallel for' directive
-C:\Users\zackz\FluTransmission\FluTransmission\FluTransmission.cpp(114,13): warning C4849: OpenMP 'collapse' clause ignored in 'parallel for' directive
-C:\Users\zackz\FluTransmission\FluTransmission\FluTransmission.cpp(159,13): warning C4849: OpenMP 'collapse' clause ignored in 'parallel for' directive
-C:\Users\zackz\FluTransmission\FluTransmission\FluTransmission.cpp(170,13): warning C4849: OpenMP 'collapse' clause ignored in 'parallel for' directive
-  FluTransmission.vcxproj -> C:\Users\zackz\FluTransmission\FluTransmission\x64\Debug\FluTransmission.exe
+  FluTransmission.vcxproj -> C:\Users\zackz\source\repos\FluTransmission\x64\Debug\FluTransmission.exe
