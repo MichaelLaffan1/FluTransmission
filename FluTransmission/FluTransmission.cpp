@@ -98,9 +98,7 @@ void printThreadGridToFile(int** threadGrid, int day) {
 
 // Update grid based on transmission and recovery rules
 void updateGrid(Person** grid, Person** newGrid, int** threadGrid) {
-    #pragma omp parallel for collapse(2) schedule(guided)
-    // collapse(2) instructs OpenMP to consider the nested loops as a single "flattened" loop for better thread distribution
-    // schedule(guided) instucts OpenMP to dynamically distribute chunks of iterations, helping ensure load balance across threads.
+    #pragma omp parallel for collapse(2) schedule(static) // Use static scheduling to balance work across threads
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             newGrid[i][j] = grid[i][j]; // Copy current state
