@@ -70,28 +70,45 @@ void initializeGrid(Person** grid) {
     }
 }
 
-// Function to print the grid to a file
+// Function to print the main grid to a file
 void printGridToFile(Person** grid, int day) {
     std::ofstream file("flu_simulation.txt", std::ios::app); // Append to file
     file << "Day " << day << ":\n";
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
-            file << (grid[i][j].sick_days > 0 ? 1 : 0) << " ";
+            file << (grid[i][j].sick_days > 0 ? 1 : 0) << " "; // sick status
         }
         file << "\n";
     }
-    file << "\n";
+    file.close();
+}
+
+// Function to print the thread grid to a separate file
+void printThreadGridToFile(int** threadGrid, int day) {
+    std::ofstream file("thread_grid.txt", std::ios::app);  // Append to file
+    file << "Day " << day << ":\n";
+    for (int i = 0; i < gridHeight; ++i) {
+        for (int j = 0; j < gridWidth; ++j) {
+            file << threadGrid[i][j] << " ";  // Write each cell's thread number
+        }
+        file << "\n";
+    }
     file.close();
 }
 
 // Update grid based on transmission and recovery rules
-void updateGrid(Person** grid, Person** newGrid) {
+void updateGrid(Person** grid, Person** newGrid, int** threadGrid) {
     #pragma omp parallel for collapse(2) schedule(guided)
     // collapse(2) instructs OpenMP to consider the nested loops as a single "flattened" loop for better thread distribution
     // schedule(guided) instucts OpenMP to dynamically distribute chunks of iterations, helping ensure load balance across threads.
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             newGrid[i][j] = grid[i][j]; // Copy current state
+
+            int thread_id = omp_get_thread_num(); // Get thread ID
+            threadGrid[i][j] = thread_id;         // Record which thread is working on this cell
+            if (thread_id != 0)
+                std::cout << "A different thread did something! " << thread_id << std::endl;
 
             if (grid[i][j].sick_days > 0) {  // If person is sick
                 newGrid[i][j].sick_days++;  // Increment sick days
@@ -106,7 +123,7 @@ void updateGrid(Person** grid, Person** newGrid) {
                 if (j > 0 && grid[i][j - 1].sick_days > 0) sickNeighbors++;
                 if (j < gridWidth - 1 && grid[i][j + 1].sick_days > 0) sickNeighbors++;
 
-                unsigned int thread_seed = 123456789 + omp_get_thread_num(); // thread-specific seed
+                unsigned int thread_seed = 123456789 + thread_id; // thread-specific seed
                 if (customRand(thread_seed) % 1000 < beta * sickNeighbors * 1000) {
                     newGrid[i][j].was_infected = true;
                     newGrid[i][j].sick_days = 1;
@@ -127,6 +144,10 @@ int main() {
     std::ofstream file("flu_simulation.txt", std::ios::trunc);
     file.close();
 
+    // Open the thread grid file in truncate mode initially to clear previous results
+    std::ofstream thread_file("thread_grid.txt", std::ios::trunc);
+    thread_file.close();
+
     double start_time = omp_get_wtime();
 
     /* Allocate grid and tracking arrays. Having grid and newGrid allows for:
@@ -135,21 +156,25 @@ int main() {
     */
     Person** grid = new Person * [gridHeight];
     Person** newGrid = new Person * [gridHeight];
+    int** threadGrid = new int* [gridHeight]; // Debug grid for tracking thread assignments
     for (int i = 0; i < gridHeight; ++i) {
         grid[i] = new Person[gridWidth];
         newGrid[i] = new Person[gridWidth];
+        threadGrid[i] = new int[gridWidth];
     }
 
     initializeGrid(grid);
     printGridToFile(grid, 0);
+    printThreadGridToFile(threadGrid, 0);
 
     // Simulation loop
     for (int day = 1; day <= numDays; ++day) {
         // Update the grid based on transmission/recovery rules
-        updateGrid(grid, newGrid);
+        updateGrid(grid, newGrid, threadGrid);
 
         // Print grid to file
         printGridToFile(newGrid, day);
+        printThreadGridToFile(threadGrid, day);
 
         // Swap pointers instead of copying
         Person** temp = grid;
@@ -161,9 +186,11 @@ int main() {
     for (int i = 0; i < gridHeight; ++i) {
         delete[] grid[i];
         delete[] newGrid[i];
+        delete[] threadGrid[i];
     }
     delete[] grid;
     delete[] newGrid;
+    delete[] threadGrid;
 
     double end_time = omp_get_wtime();
     std::cout << "Simulation completed in: " << (end_time - start_time) << " seconds." << std::endl;
