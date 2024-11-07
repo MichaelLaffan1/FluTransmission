@@ -5,11 +5,11 @@
 // Default values for simulation settings
 int gridHeight = 5;
 int gridWidth = 5;
-double alpha = 0.1;
-double beta = 0.3;
-int omega = 2;
-int numDays = 5;
-int numThreads;
+double alpha = 0.1; // Initial sick ratio
+double beta = 0.3; // Likelihood of transmission
+int omega = 2; // Days a person stays sick
+int numDays = 5; // Total simulation days
+int numThreads; // Threads that OpenMP should use
 
 // Class to represent a person
 class Person {
@@ -20,7 +20,7 @@ public:
     Person() : was_infected(false), sick_days(0) {}
 };
 
-// Function to read settings from a configuration file
+// Function to read simulation settings from a configuration file
 void readSettingsFromFile(const char* filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -57,7 +57,7 @@ void initializeGrid(Person** grid) {
     int totalPeople = gridHeight * gridWidth;
     int infectedCount = static_cast<int>(alpha * totalPeople);
 
-#pragma omp parallel for schedule(guided)
+    #pragma omp parallel for schedule(guided)
     for (int count = 0; count < infectedCount; ++count) {
         unsigned int seed = 123456789 + omp_get_thread_num(); // Unique seed per thread
         int i, j;
@@ -72,9 +72,8 @@ void initializeGrid(Person** grid) {
 
 // Function to print the grid to a file
 void printGridToFile(Person** grid, int day) {
-    std::ofstream file("flu_simulation.txt", std::ios::app);
+    std::ofstream file("flu_simulation.txt", std::ios::app); // Append to file
     file << "Day " << day << ":\n";
-    file << "Grid (Infection Status):\n";
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             file << (grid[i][j].sick_days > 0 ? 1 : 0) << " ";
@@ -87,18 +86,20 @@ void printGridToFile(Person** grid, int day) {
 
 // Update grid based on transmission and recovery rules
 void updateGrid(Person** grid, Person** newGrid) {
-#pragma omp parallel for collapse(2) schedule(guided)
+    #pragma omp parallel for collapse(2) schedule(guided)
+    // collapse(2) instructs OpenMP to consider the nested loops as a single "flattened" loop for better thread distribution
+    // schedule(guided) instucts OpenMP to dynamically distribute chunks of iterations, helping ensure load balance across threads.
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             newGrid[i][j] = grid[i][j]; // Copy current state
 
             if (grid[i][j].sick_days > 0) {  // If person is sick
                 newGrid[i][j].sick_days++;  // Increment sick days
-                if (newGrid[i][j].sick_days >= omega) {
+                if (newGrid[i][j].sick_days >= omega) { // Check if they recovered
                     newGrid[i][j].sick_days = 0;  // Person recovers
                 }
             }
-            else if (!grid[i][j].was_infected) {  // Only never-infected individuals
+            else if (!grid[i][j].was_infected) {  // Only never-infected individuals can get infected
                 int sickNeighbors = 0;
                 if (i > 0 && grid[i - 1][j].sick_days > 0) sickNeighbors++;
                 if (i < gridHeight - 1 && grid[i + 1][j].sick_days > 0) sickNeighbors++;
@@ -127,7 +128,11 @@ int main() {
     file.close();
 
     double start_time = omp_get_wtime();
-    // Allocate grid and tracking arrays
+
+    /* Allocate grid and tracking arrays. Having grid and newGrid allows for:
+      1. Consistent calculations by ensuring each day’s updates are based on a static snapshot of the previous day.
+      2. Correct modeling of simultaneous infection / recovery without interference from updates that have not yet been fully applied.
+    */
     Person** grid = new Person * [gridHeight];
     Person** newGrid = new Person * [gridHeight];
     for (int i = 0; i < gridHeight; ++i) {
