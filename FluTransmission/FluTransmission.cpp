@@ -173,8 +173,16 @@ int main() {
     }
 
     initializeGrid(grid);
-    printGridToFileSequential(grid, 0, "flu_simulation.txt");
-    printThreadGridToFileSequential(threadGrid, 0, "thread_grid.txt");
+
+    // Write simulation and thread grid outputs in parallel
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        printGridToFileSequential(grid, 0, "flu_simulation.txt");
+
+        #pragma omp section
+        printThreadGridToFileSequential(threadGrid, 0, "thread_grid.txt");
+    }
 
     // Simulation loop
     for (int day = 1; day <= numDays; ++day) {
