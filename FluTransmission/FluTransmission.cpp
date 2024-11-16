@@ -9,7 +9,7 @@ double alpha = 0.1; // Initial sick ratio
 double beta = 0.3; // Likelihood of transmission
 int omega = 2; // Days a person stays sick
 int numDays = 5; // Total simulation days
-int numThreads; // Threads that OpenMP should use
+int numThreads;
 
 // Class to represent a person
 class Person {
@@ -70,29 +70,41 @@ void initializeGrid(Person** grid) {
     }
 }
 
-// Function to print the main grid to a file
-void printGridToFile(Person** grid, int day) {
-    std::ofstream file("flu_simulation.txt", std::ios::app); // Append to file
+// Sequential print function for main grid output
+void printGridToFileSequential(Person** grid, int day, const char* filename) {
+    // Open file in append mode
+    std::ofstream file(filename, std::ios::app); // Append to file
+
+    // Print the day header once
     file << "Day " << day << ":\n";
+
+    // Print the grid rows in order
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             file << (grid[i][j].sick_days > 0 ? 1 : 0) << " "; // sick status
         }
         file << "\n";
     }
+
     file.close();
 }
 
-// Function to print the thread grid to a separate file
-void printThreadGridToFile(int** threadGrid, int day) {
-    std::ofstream file("thread_grid.txt", std::ios::app);  // Append to file
+// Sequential print function for thread grid output
+void printThreadGridToFileSequential(int** threadGrid, int day, const char* filename) {
+    // Open file in append mode
+    std::ofstream file(filename, std::ios::app);
+
+    // Print the day header once
     file << "Day " << day << ":\n";
+
+    // Print the thread grid rows in order
     for (int i = 0; i < gridHeight; ++i) {
         for (int j = 0; j < gridWidth; ++j) {
             file << threadGrid[i][j] << " ";  // Write each cell's thread number
         }
         file << "\n";
     }
+
     file.close();
 }
 
@@ -105,8 +117,6 @@ void updateGrid(Person** grid, Person** newGrid, int** threadGrid) {
 
             int thread_id = omp_get_thread_num(); // Get thread ID
             threadGrid[i][j] = thread_id;         // Record which thread is working on this cell
-            if (thread_id != 0)
-                std::cout << "A different thread did something! " << thread_id << std::endl;
 
             if (grid[i][j].sick_days > 0) {  // If person is sick
                 newGrid[i][j].sick_days++;  // Increment sick days
@@ -121,8 +131,9 @@ void updateGrid(Person** grid, Person** newGrid, int** threadGrid) {
                 if (j > 0 && grid[i][j - 1].sick_days > 0) sickNeighbors++;
                 if (j < gridWidth - 1 && grid[i][j + 1].sick_days > 0) sickNeighbors++;
 
-                unsigned int thread_seed = 123456789 + thread_id; // thread-specific seed
-                if (customRand(thread_seed) % 1000 < beta * sickNeighbors * 1000) {
+                // Persistent thread-local random seed
+                static thread_local unsigned int thread_seed = 123456789 + omp_get_thread_num();
+                if (customRand(thread_seed) % 1000 < beta * sickNeighbors * 1000.0) {
                     newGrid[i][j].was_infected = true;
                     newGrid[i][j].sick_days = 1;
                 }
@@ -162,8 +173,8 @@ int main() {
     }
 
     initializeGrid(grid);
-    printGridToFile(grid, 0);
-    printThreadGridToFile(threadGrid, 0);
+    printGridToFileSequential(grid, 0, "flu_simulation.txt");
+    printThreadGridToFileSequential(threadGrid, 0, "thread_grid.txt");
 
     // Simulation loop
     for (int day = 1; day <= numDays; ++day) {
@@ -171,8 +182,8 @@ int main() {
         updateGrid(grid, newGrid, threadGrid);
 
         // Print grid to file
-        printGridToFile(newGrid, day);
-        printThreadGridToFile(threadGrid, day);
+        printGridToFileSequential(newGrid, day, "flu_simulation.txt");
+        printThreadGridToFileSequential(threadGrid, day, "thread_grid.txt");
 
         // Swap pointers instead of copying
         Person** temp = grid;
