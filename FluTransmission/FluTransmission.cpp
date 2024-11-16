@@ -181,9 +181,15 @@ int main() {
         // Update the grid based on transmission/recovery rules
         updateGrid(grid, newGrid, threadGrid);
 
-        // Print grid to file
-        printGridToFileSequential(newGrid, day, "flu_simulation.txt");
-        printThreadGridToFileSequential(threadGrid, day, "thread_grid.txt");
+        // Write simulation and thread grid outputs in parallel
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            printGridToFileSequential(newGrid, day, "flu_simulation.txt");
+
+             #pragma omp section
+            printThreadGridToFileSequential(threadGrid, day, "thread_grid.txt");
+        }
 
         // Swap pointers instead of copying
         Person** temp = grid;
