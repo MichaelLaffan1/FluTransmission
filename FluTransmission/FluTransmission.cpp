@@ -70,8 +70,8 @@ void initializeGrid(Person** grid) {
     }
 }
 
-// Sequential print function for main grid output
-void printGridToFileSequential(Person** grid, int day, const char* filename) {
+// Print function for main grid output
+void printGridToFile(Person** grid, int day, const char* filename) {
     // Open file in append mode
     std::ofstream file(filename, std::ios::app); // Append to file
 
@@ -89,8 +89,8 @@ void printGridToFileSequential(Person** grid, int day, const char* filename) {
     file.close();
 }
 
-// Sequential print function for thread grid output
-void printThreadGridToFileSequential(int** threadGrid, int day, const char* filename) {
+// Print function for thread grid output
+void printThreadGridToFile(int** threadGrid, int day, const char* filename) {
     // Open file in append mode
     std::ofstream file(filename, std::ios::app);
 
@@ -173,15 +173,15 @@ int main() {
     }
 
     initializeGrid(grid);
-
+    
     // Write simulation and thread grid outputs in parallel
     #pragma omp parallel sections
     {
         #pragma omp section
-        printGridToFileSequential(grid, 0, "flu_simulation.txt");
+        printGridToFile(grid, 0, "flu_simulation.txt");
 
         #pragma omp section
-        printThreadGridToFileSequential(threadGrid, 0, "thread_grid.txt");
+        printThreadGridToFile(threadGrid, 0, "thread_grid.txt");
     }
 
     // Simulation loop
@@ -193,10 +193,10 @@ int main() {
         #pragma omp parallel sections
         {
             #pragma omp section
-            printGridToFileSequential(newGrid, day, "flu_simulation.txt");
+            printGridToFile(newGrid, day, "flu_simulation.txt");
 
              #pragma omp section
-            printThreadGridToFileSequential(threadGrid, day, "thread_grid.txt");
+            printThreadGridToFile(threadGrid, day, "thread_grid.txt");
         }
 
         // Swap pointers instead of copying
