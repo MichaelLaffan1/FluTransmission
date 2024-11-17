@@ -95,4 +95,4 @@ if __name__ == "__main__":
 
     debug_data = read_flu_data("FluTransmission/thread_grid.txt")
     plot_data(debug_data)
-    animate_data(debug_data)
+    #animate_data(debug_data)
